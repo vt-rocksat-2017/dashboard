@@ -11,7 +11,6 @@ def ais_to_bitarray(data):
     for ch in data:
         print ch
 
-
 class ais_msg_123(object):
     def __init__(self, data):
         #Message 1,2,3 - Position Report

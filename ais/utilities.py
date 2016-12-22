@@ -19,31 +19,19 @@ e_e     = 0.081819221456	    #Eccentricity of Earth
 
 
 class ais_msg(object):
-    def __init__(self, ts, data):
-        self.time_rx = ts
-        self.field1 = data[0].strip() # AIVDM flag
-        self.field2 = data[1].strip() # Number of lines (should be 1)
-        self.field3 = data[2].strip() # line number (shoulbe be 1)
-        self.field4 = data[3].strip() # empty
-        self.ais_chan = data[4].strip() # AIS Channel
-        self.ais_msg = data[5].strip() # AIS Message
-        self.field7 = data[6].strip() # NMEA Checksum?
-        #print self.time_rx, self.field6, len(self.field6)*6, ord(self.field6[0])-48
-        #ais_to_bitarray(self.field6)
-        print self.ais_msg, len(self.ais_msg)
+    def __init__(self, ts, chan, msg ):
+        self.ts     = ts
+        self.chan   = chan
+        self.msg    = msg
+        self.msg_decoded = None
         try:
-            a = ais.decode(self.ais_msg,0)        
-            #print a, type(a)
-            if (a['id'] == 1) or (a['id'] == 2) or (a['id'] == 3): #Position Report
-                print self.ais_chan, a['id'], a['mmsi'], a['x'], a['y'], a['true_heading']
-            elif a['id'] ==4: #Base station Report
-                print self.ais_chan, a['id'], a['x'], a['y'], a['mmsi']
-            elif a['id'] == 21: #Aids to Navigation
-                print self.ais_chan, a['id'], a['x'], a['y'], a['mmsi']
-            elif a['id'] == 18: #Standard Class B CS Position Report
-                print self.ais_chan, a['id'], a['x'], a['y'], a['mmsi']
+            self.msg_decoded = ais.decode(self.msg,0)
         except Exception as e:
             print e
+        #print self.time_rx, self.field6, len(self.field6)*6, ord(self.field6[0])-48
+        #ais_to_bitarray(self.field6)
+        
+        
 
 class measurements(object):
     def __init__(self):

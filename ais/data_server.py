@@ -17,6 +17,8 @@ import time
 
 from datetime import datetime as date
 from utilities import *
+import json
+
 
 class Data_Server(threading.Thread):
     def __init__ (self, options):
@@ -34,8 +36,14 @@ class Data_Server(threading.Thread):
         self.recon_count    = 0
         self.total_count    = 0
 
-        self.ais_msgs   = []
+        self.ais_msgs       = []
 
+        self.frag_flag      = False #Fragmented message flag
+        self.frag_count     = 0     #number of message fragments
+        self.frag_buff      = ""    #Message buffer for multi-fragment messages
+
+
+        #---------OLD VAriables, may still need some------------
         #self.valid = measurements() #measurement object
         #self.fault = faults() #measurement object
         #self.recon = recons() #measurement object
@@ -57,12 +65,13 @@ class Data_Server(threading.Thread):
 
         while (not self._stop.isSet()):
             if self.connected == True: 
-                #for l in self.readlines():
-                #    print self.utc_ts(), l
-                #    #self.Decode_Frame(l, date.utcnow())
-                data = self.sock.recv(4096)
+                for ts,l in self.readlines():
+                    #print ts, l
+                    self.Decode_Frame(ts, l.split(','))
+                #data = self.sock.recv(4096)
+                #for 
                 #print self.utc_ts(), data
-                self.ais_msgs.append(ais_msg(date.utcnow(), data.split(",")))
+                #self.Decode_Frame(data, date.utcnow())
             elif self.connected == False:
                 #print "Disconnected from modem..."
                 time.sleep(1)
@@ -83,23 +92,48 @@ class Data_Server(threading.Thread):
         self.log_f.write(msg)
         self.log_f.close()
 
-    def Decode_Frame(self, line, rx_ts):
+    def Decode_Frame(self, ts, data):
         #print str(rx_ts) + "," + line
-        #write line to file - TO DO
-        #if self.log_flag: self.update_log(line, rx_ts)
-        data = line.split(",")
-
-        try:
-            pkt_id = float(data[2]) #try to type cast field 2 to float.
-            self.Decode_Valid(data, rx_ts)
-        except:
-            if   data[2] == "SERIAL FAULT":
-                self.fault.append(data, rx_ts)
-                self.last_frame_type = 1
-            elif data[2] == "RECONNECTED TO SERIAL PORT":
-                self.recon.append(data, rx_ts)
-                self.last_frame_type = 2
-        #print self.last_frame_type
+        if data[0] == "!AIVDM": #legitimate AIS Message
+            #print str(ts) + " UTC |", data
+            if int(data[1]) > 1:  #fragmented message
+                print "message fragmented", data[2]
+                if self.frag_flag: #fragment flag set by previous loop
+                    self.frag_buff += data[5]
+                    if data[1] == data[2]:  #this is last iteration of message
+                        self.ais_msgs.append(ais_msg(ts, data[4], self.frag_buff))
+                        #print len(self.ais_msgs), self.ais_msgs[-1].ts, self.ais_msgs[-1].chan, self.ais_msgs[-1].msg
+                        #print self.ais_msgs[-1].msg_decoded, "\n"
+                        self.frag_buff = ""
+                        self.frag_flag = False
+                        self.frag_count = 0
+                else:
+                    self.frag_buff += data[5]
+                    self.frag_flag = True
+                    self.frag_count = data[1]
+            else:  #single line
+                self.ais_msgs.append(ais_msg(ts, data[4], data[5]))
+                #print len(self.ais_msgs), self.ais_msgs[-1].ts, self.ais_msgs[-1].chan, self.ais_msgs[-1].msg
+                #print self.ais_msgs[-1].msg_decoded, "\n"
+        if len(self.ais_msgs) > 0:
+            print len(self.ais_msgs), self.ais_msgs[-1].ts, self.ais_msgs[-1].chan, self.ais_msgs[-1].msg
+            print self.ais_msgs[-1].msg_decoded, "\n"
+                
+        #print self.ais_msg, len(self.ais_msg)
+        #try:
+        #    a = ais.decode(self.ais_msg,0)        
+            #print a, type(a)
+        #    if (a['id'] == 1) or (a['id'] == 2) or (a['id'] == 3): #Position Report
+        #        print self.ais_chan, a['id'], a['mmsi'], a['x'], a['y'], a['true_heading']
+        #    elif a['id'] ==4: #Base station Report
+        #        print self.ais_chan, a['id'], a['x'], a['y'], a['mmsi']
+        #    elif a['id'] == 21: #Aids to Navigation
+        #        print self.ais_chan, a['id'], a['x'], a['y'], a['mmsi']
+        #    elif a['id'] == 18: #Standard Class B CS Position Report
+        #       print self.ais_chan, a['id'], a['x'], a['y'], a['mmsi']
+        #except Exception as e:
+        #    print e
+        #self.ais_msgs.append(ais_msg(date.utcnow(), data.split(",")))
 
     def Decode_Valid(self, data, ts):
         self.last_frame_type = 0
@@ -114,13 +148,14 @@ class Data_Server(threading.Thread):
         self.valid.append(measurement1, ts, rx_offset)
         self.valid.append(measurement2, ts, rx_offset)
 
-    def readlines(self, recv_buffer=4096, delim='\n'):
+    def readlines(self, recv_buffer=4096, delim='!'):
         #self.lock.acquire()
         buffer = ''
         data = True
         while data:
             data = self.sock.recv(recv_buffer)
-            print self.utc_ts(), data
+            ts = date.utcnow()
+            #print self.utc_ts(), data
             if len(data) == 0: 
                 self.connected = False
                 print "Disconnected from modem..."
@@ -128,10 +163,12 @@ class Data_Server(threading.Thread):
             else:
                 buffer += data
                 while buffer.find(delim) != -1:
-                    line, buffer = buffer.split('\n', 1)
+                    line, buffer = buffer.split(delim, 1)
                     #self.lock.release()
-                    yield line
+                    line = "!" + line
+                    yield ts, line.strip("\n")
         return
+
 
     def Handle_Connection_Exception(self, e):
         #print e, type(e)
