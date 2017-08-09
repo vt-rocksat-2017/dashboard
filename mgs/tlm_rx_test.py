@@ -23,7 +23,7 @@ import binascii
 from optparse import OptionParser
 from datetime import datetime as date
 
-CALLSIGN = "KJ4WRQ"
+CALLSIGN = "KJ4QLP"
     
 if __name__ == '__main__':
     #ts = (date.datetime.utcnow()).strftime("%Y%m%d")
@@ -40,9 +40,7 @@ if __name__ == '__main__':
     rand_help = "Enable random sleep, [default=%default]"
 
     parser.add_option("-a","--addr"  ,dest="addr"  ,action="store",type="string",default="0.0.0.0",help=a_help)
-    parser.add_option("-p","--port"  ,dest="port"  ,action="store",type="int",default="52001",help=p_help)
-    parser.add_option("-r","--rate"  ,dest="rate"  ,action="store",type="float" ,default="0.044",help=r_help)
-    parser.add_option("","--rand"  ,dest="rand"  ,action="store",type="int",default="0",help=rand_help)
+    parser.add_option("-p","--port"  ,dest="port"  ,action="store",type="int",default="52003",help=p_help)
 
     (options, args) = parser.parse_args()
     #--------END Command Line option parser------------------------------------------------------
@@ -56,8 +54,7 @@ if __name__ == '__main__':
     #sock.bind((options.addr, options.port))
     count = int(0)
     buff=ctypes.create_string_buffer(2)
-    sock.bind((self.ip, self.port))
-    sock.listen(1)
+    sock.connect((options.addr, options.port))
     while 1:
         try:
             rx_data, addr = sock.recvfrom(4096) # block until data received on control port
