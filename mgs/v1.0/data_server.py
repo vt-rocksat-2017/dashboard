@@ -83,8 +83,13 @@ class Data_Server(threading.Thread):
         dn_pkt_id   = numpy.uint16(struct.unpack('>H',rx_frame[6:8]))[0]     #downlink frame id
         up_pkt_id   = numpy.uint16(struct.unpack('>H',rx_frame[8:10]))[0]    #uplink frame id
         msg_type    = numpy.uint8(struct.unpack('>B',rx_frame[10]))[0]     #message type, 0=ADSB, 1=AIS, 2=HW
+
+        msg_type_str = ""
+        if msg_type == 0: msg_type_str = 'ADSB'
+        elif msg_type == 1: msg_type_str = ' AIS'
+        elif msg_type == 2: msg_type_str = '  HW'
         
-        print self.last_frame_ts, self.frame_count, callsign, dn_pkt_id, up_pkt_id, msg_type
+        print self.last_frame_ts, self.frame_count, callsign, dn_pkt_id, up_pkt_id, msg_type_str
     def Handle_Connection_Exception(self, e):
         #print e, type(e)
         errorcode = e[0]
