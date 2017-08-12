@@ -35,12 +35,19 @@ class Data_Server(threading.Thread):
         self.log_fh = setup_logger(self.id, 'main', self.ts)
         self.logger = logging.getLogger('main')
 
+        self.adsb_log_fh = setup_logger(self.id, 'adsb_frame', self.ts)
+        self.adsb_logger = logging.getLogger('adsb_frame')
+
+        self.ais_log_fh = setup_logger(self.id, 'ais_frame', self.ts)
+        self.ais_logger = logging.getLogger('ais_frame')
+
+
         self.last_frame_ts  = dt.datetime.utcnow()  #Time Stamp of last received frame
 
-        self.frame_count    = 0
-        self.adsb_count     = 0
-        self.ais_count      = 0
-        self.hw_count       = 0
+        self.frame_count        = 0
+        self.adsb_frame_count   = 0
+        self.ais_frame_count    = 0
+        self.hw_frame_count     = 0
 
     def run(self):
         print "Data Server Running..."
@@ -53,11 +60,14 @@ class Data_Server(threading.Thread):
 
         while (not self._stop.isSet()):
             if self.connected == True: 
-                data = self.sock.recv(4096)
-                if len(data) == 256:
-                    self.Decode_Frame(data, dt.datetime.utcnow())
-                else:
-                    self.connected = False
+                try:
+                    data = self.sock.recv(4096)
+                    if len(data) == 256:
+                        self.Decode_Frame(data, dt.datetime.utcnow())
+                    else:
+                        self.connected = False
+                except Exception as e:
+                    self.Handle_Connection_Exception(e)
             elif self.connected == False:
                 print self.utc_ts() + "Disconnected from modem..."
                 time.sleep(1)
@@ -87,12 +97,19 @@ class Data_Server(threading.Thread):
         msg_type_str = ""
         if msg_type == 0: 
             msg_type_str = 'ADSB'
-            self.adsb_count += 1
+            self.adsb_frame_count += 1
             self.adsb_cb.q.put(rx_frame)
-        elif msg_type == 1: msg_type_str = ' AIS'
+            self.adsb_logger.info(str(self.adsb_frame_count) + ',' + binascii.hexlify(rx_frame))
+        elif msg_type == 1: 
+            msg_type_str = ' AIS'
+            self.ais_frame_count += 1
+            #print rx_frame
+            self.ais_cb.q.put(rx_frame)
+            self.ais_logger.info(str(self.ais_frame_count) + ',' + binascii.hexlify(rx_frame))
         elif msg_type == 2: msg_type_str = '  HW'
         
         print self.last_frame_ts, self.frame_count, callsign, dn_pkt_id, up_pkt_id, msg_type_str
+
     def Handle_Connection_Exception(self, e):
         #print e, type(e)
         errorcode = e[0]
@@ -107,32 +124,12 @@ class Data_Server(threading.Thread):
             self.sock.close()
         self.connected = False
 
-    def get_frame_counts(self):
-        self.valid_count = len(self.valid.time_tx)        
-        self.fault_count = len(self.fault.time_tx)
-        self.recon_count = len(self.recon.time_tx)
-        self.total_count = self.valid_count + self.fault_count + self.recon_count
-        #print self.utc_ts(), self.total_count, self.valid_count, self.fault_count, self.recon_count
-        return self.total_count, self.valid_count, self.fault_count, self.recon_count
-
-    def set_start_time(self, start):
-        print self.utc_ts() + "Mission Clock Started"
-        ts = start.strftime('%Y%m%d_%H%M%S')
-        self.log_file = "./log/rocksat_"+ self.id + "_" + ts + ".log"
-        log_f = open(self.log_file, 'a')
-        msg = "Rocksat Receiver ID: " + self.id + "\n"
-        msg += "Log Initialization Time Stamp: " + str(start) + " UTC\n\n"
-        log_f.write(msg)
-        log_f.close()
-        self.log_flag = True
-        print self.utc_ts() + "Logging Started: " + self.log_file
-        self.valid_start = True
-        self.start_time = start
-        for i in range(len(self.valid.time_rx)):
-            self.valid.rx_offset[i] = (self.valid.time_rx[i]-self.start_time).total_seconds()
-
     def set_adsb_callback(self, callback):
         self.adsb_cb = callback
+        #print 'set adsb callback'
+
+    def set_ais_callback(self, callback):
+        self.ais_cb = callback
         #print 'set adsb callback'
 
     def stop(self):

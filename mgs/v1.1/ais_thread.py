@@ -20,45 +20,46 @@ from Queue import Queue
 import datetime as dt
 from logger import *
 
-class ADSB_Thread(threading.Thread):
+class AIS_Thread(threading.Thread):
     def __init__ (self, options):
-        threading.Thread.__init__(self,name = 'ADSBThread')
+        threading.Thread.__init__(self,name = 'AISThread')
         self._stop          = threading.Event()
-        self.ip             = options.adsb_ip
-        self.port           = options.adsb_port
+        self.ip             = options.ais_ip
+        self.port           = options.ais_port
         self.id             = options.id
         self.ts             = options.ts
         self.sock           = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #TCP Socket
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.settimeout(1)
         self.connected      = False
-
-        self.log_fh = setup_logger(self.id, 'adsb_msg', self.ts)
-        self.logger = logging.getLogger('adsb_msg')
+        self.log_fh = setup_logger(self.id, 'ais_msg', self.ts)
+        self.logger = logging.getLogger('ais_msg')
 
         self.last_frame_ts  = dt.datetime.utcnow()  #Time Stamp of last received frame
         
-        self.adsb_count = 0 #number of individual ADSB messages received
+        self.ais_count = 0 #number of individual ADSB messages received
+        self.msgs = None
         self.q = Queue()
 
     def run(self):
-        print "ADSB Thread Running..."
+        print "AIS Thread Running..."
         try:
-            print 'trying to connect to VRS'
+            print 'trying to connect to OpenCPN'
             self.sock.connect((self.ip, self.port))
             self.connected = True
-            print self.utc_ts() + "Connected to Virtual Radar Server..."
+            print self.utc_ts() + "Connected to OpenCPN..."
         except Exception as e:
             self.Handle_Connection_Exception(e)
 
         while (not self._stop.isSet()):
+            if (not self.q.empty()): #new message in Queue for downlink
+                ais_frame = self.q.get() #should be 256 byte messages
+                self.msgs = self.Decode_AIS_Frame(ais_frame)
             if self.connected == True: 
-                if (not self.q.empty()): #new message in Queue for downlink
-                    adsb_frame = self.q.get() #should be 256 byte messages
-                    msgs = self.Decode_ADSB_Frame(adsb_frame)
-                    self.send_to_plotter(msgs)
+                pass
+                self.send_to_plotter(self.msgs)
             elif self.connected == False:
-                print self.utc_ts() + "Disconnected from Virtual Radar Server..."
+                print self.utc_ts() + "Disconnected from OpenCPN..."
                 time.sleep(1)
                 try:
                     self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #TCP Socket
@@ -66,7 +67,34 @@ class ADSB_Thread(threading.Thread):
                     #self.sock.settimeout(1)
                     self.sock.connect((self.ip, self.port))
                     self.connected = True
-                    print self.utc_ts() + "Connected to Virtual Radar Server..."
+                    print self.utc_ts() + "Connected to OpenCPN..."
+                except Exception as e:
+                    self.Handle_Connection_Exception(e)
+
+    def Decode_AIS_Frame(self,frame):
+        data = frame[11:]
+        #print data
+        data_lines = data.split('!')
+        #print data_lines
+        msgs = []
+        for dl in data_lines:
+            if len(dl) > 0:
+                msgs.append("!" + dl)
+
+        print msgs
+        for msg in msgs:
+            self.ais_count +=1
+            self.logger.info(str(self.ais_count)+','+msg)
+        return msgs
+
+    def send_to_plotter(self,msgs):
+        if msgs != None:
+            for msg in msgs:
+                print msg
+                msg_str = msg
+                #print 'sending', msg_str
+                try:
+                    self.sock.send(msg_str)
                 except Exception as e:
                     self.Handle_Connection_Exception(e)
 
@@ -97,7 +125,7 @@ class ADSB_Thread(threading.Thread):
             MASK = MASK << 1 #bit shift MASK for next iteration
         return msgs
 
-    def send_to_plotter(self,msgs):
+    def send_to_plotter_old(self,msgs):
         for msg in msgs:
             msg_str = '*' + str(binascii.hexlify(msg)) + ';\n'
             #print 'sending', msg_str

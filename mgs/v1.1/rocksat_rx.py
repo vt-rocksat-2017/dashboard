@@ -19,6 +19,7 @@ import datetime as dt
 from optparse import OptionParser
 from data_server import *
 from adsb_thread import *
+from ais_thread import *
 
 def main():
     start_ts = dt.datetime.utcnow().strftime("%Y%m%d_%H%M%S.%f")
@@ -40,6 +41,12 @@ def main():
     h_adsb_port = "Set Virtual Radar Server Port [default=%default]"
     parser.add_option("-b", dest = "adsb_ip"   , action = "store", type = "string", default='127.0.0.1', help = h_adsb_ip)
     parser.add_option("-c", dest = "adsb_port" , action = "store", type = "int"   , default='30003'    , help = h_adsb_port)
+
+    #AIS Parameters
+    h_ais_ip   = "Set OpenCPN IP [default=%default]"
+    h_ais_port = "Set OpenCPN Port [default=%default]"
+    parser.add_option("-d", dest = "ais_ip"   , action = "store", type = "string", default='127.0.0.1', help = h_adsb_ip)
+    parser.add_option("-e", dest = "ais_port" , action = "store", type = "int"   , default='2948'     , help = h_adsb_port)
     
     (options, args) = parser.parse_args()
     #--------END Command Line option parser------------------------------------------------------    
@@ -47,14 +54,20 @@ def main():
     os.system('reset')
     lock = threading.Lock()
 
-    adsb_thread = ADSB_Server(options)
+    adsb_thread = ADSB_Thread(options)
     adsb_thread.daemon = True
     adsb_thread.start() #blocking
+
+    ais_thread = AIS_Thread(options)
+    ais_thread.daemon = True
+    ais_thread.start() #blocking
+
 
     #server_thread = Data_Server(options, lock)
     server_thread = Data_Server(options)
     server_thread.daemon = True
     server_thread.set_adsb_callback(adsb_thread)
+    server_thread.set_ais_callback(ais_thread)
     server_thread.run() #blocking
     #server_thread.start() #Non-blocking
 
