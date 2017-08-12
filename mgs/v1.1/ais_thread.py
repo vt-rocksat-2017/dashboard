@@ -56,7 +56,6 @@ class AIS_Thread(threading.Thread):
                 ais_frame = self.q.get() #should be 256 byte messages
                 self.msgs = self.Decode_AIS_Frame(ais_frame)
             if self.connected == True: 
-                pass
                 self.send_to_plotter(self.msgs)
             elif self.connected == False:
                 print self.utc_ts() + "Disconnected from OpenCPN..."
@@ -81,7 +80,7 @@ class AIS_Thread(threading.Thread):
             if len(dl) > 0:
                 msgs.append("!" + dl)
 
-        print msgs
+        #print msgs
         for msg in msgs:
             self.ais_count +=1
             self.logger.info(str(self.ais_count)+','+msg)
@@ -90,13 +89,11 @@ class AIS_Thread(threading.Thread):
     def send_to_plotter(self,msgs):
         if msgs != None:
             for msg in msgs:
-                print msg
-                msg_str = msg
-                #print 'sending', msg_str
                 try:
-                    self.sock.send(msg_str)
+                    self.sock.send(msg)
                 except Exception as e:
                     self.Handle_Connection_Exception(e)
+        self.msgs = None
 
     def Decode_ADSB_Frame(self, frame):
         msgs = []
